@@ -198,8 +198,9 @@ function drawScene(svg, { ref, layers, grid = true, truthLine = null, handle = f
   if (handle) {
     const h = layers[0].h * scale;
     const cx = tgtX + (layers[0].h * BOX[layers[0].obj.id].aspect * scale) / 2;
-    const y = Math.max(top - 20, ground - h - 26);
-    out += `<g transform="translate(${cx} ${y})"><rect x="-22" y="-12" width="44" height="24" rx="12" style="fill:var(--accent)"/><path d="M-6 -2 L0 -8 L6 -2 M-6 2 L0 8 L6 2" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+    const y = Math.max(top - 18, ground - h - 26);
+    // Round badge with a diagonal double arrow: the resize scales both width and height.
+    out += `<g transform="translate(${cx} ${y})"><circle r="16" style="fill:var(--accent)"/><path transform="rotate(45)" d="M0 -8 L0 8 M-4.5 -3.5 L0 -8 L4.5 -3.5 M-4.5 3.5 L0 8 L4.5 3.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>`;
   }
   svg.innerHTML = out;
 }
