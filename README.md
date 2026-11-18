@@ -38,9 +38,18 @@ Bon à savoir sur le plan gratuit : le service s’endort après 15 min sans tra
 | `public/objects.js` | Catalogue des silhouettes (SVG + taille réelle) et calcul du score, partagé client/serveur |
 | `public/app.js` | Client : écrans, scène, redimensionnement à la souris, au doigt ou au clavier |
 
+### Silhouettes
+
+Les silhouettes sont des SVG libres de droits (CC0) venant de [PhyloPic](https://www.phylopic.org) pour les animaux et de [FreeSVG](https://freesvg.org) pour le reste ; sources et licences dans [`CREDITS.md`](CREDITS.md). Elles sont dans `public/silhouettes/`, recadrées au pixel près : le bas du fichier est le sol, sa hauteur est la hauteur réelle de l’objet. Le client les affiche via `<image>` et les recolore d’une seule teinte avec un filtre SVG (couleur du joueur, vert pour la vraie taille).
+
 ### Ajouter un objet
 
-Ajoute une entrée dans `OBJECTS` (`public/objects.js`) : `id`, `name` (« Un/Une/La … »), `h` (hauteur réelle en mètres) et `svg` (formes remplies, axe y vers le bas). Le client mesure la boîte englobante du dessin : son bas est posé au sol et sa hauteur correspond à `h`.
+1. Trouve une silhouette CC0 (PhyloPic : filtre « domaine public » ; FreeSVG : tout est CC0).
+2. Recadre-la au plus près du dessin (viewBox serré, sans marge) et dépose-la dans `public/silhouettes/<id>.svg`.
+3. Ajoute une entrée dans `OBJECTS` (`public/objects.js`) : `id`, `name` (« Un/Une/La … »), `h` (hauteur réelle en mètres, du sol au point le plus haut du dessin), `src` et `aspect` (largeur ÷ hauteur du viewBox).
+4. Ajoute sa ligne dans `CREDITS.md`.
+
+Pour une forme purement géométrique, on peut aussi donner un `svg` en ligne à la place de `src` (voir la porte ou la pyramide) : le client mesure alors lui-même la boîte englobante.
 
 ### Score
 

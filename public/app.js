@@ -33,6 +33,11 @@ const BOX = {};
 function measureAll() {
   const host = $('measure');
   for (const o of OBJECTS) {
+    if (o.src) {
+      BOX[o.id] = { aspect: o.aspect };
+      new Image().src = `/${o.src}`; // warm the cache so a round never starts on a blank slot
+      continue;
+    }
     const g = document.createElementNS(SVGNS, 'g');
     g.innerHTML = o.svg;
     host.appendChild(g);
@@ -40,6 +45,25 @@ function measureAll() {
     BOX[o.id] = { x: b.x, y: b.y, w: b.width, h: b.height, aspect: b.width / b.height };
     host.removeChild(g);
   }
+}
+
+/**
+ * Image silhouettes come in any colours; this filter repaints every opaque pixel
+ * in one colour, so they look like the inline drawings. One filter per colour,
+ * kept in the hidden #measure svg and shared by every scene on the page.
+ */
+const TINTS = new Set();
+function tint(color) {
+  const id = `tint-${color.replace(/[^a-z0-9]/gi, '')}`;
+  if (!TINTS.has(id)) {
+    TINTS.add(id);
+    const f = document.createElementNS(SVGNS, 'filter');
+    f.id = id;
+    f.setAttribute('color-interpolation-filters', 'sRGB');
+    f.innerHTML = `<feFlood flood-color="${color}"/><feComposite in2="SourceAlpha" operator="in"/>`;
+    $('measure').appendChild(f);
+  }
+  return id;
 }
 
 /* ---------------- formatting ---------------- */
@@ -101,6 +125,9 @@ function drawScene(svg, { ref, layers, grid = true, truthLine = null, handle = f
     const b = BOX[obj.id];
     const ph = h * scale;
     const pw = ph * b.aspect;
+    if (obj.src) {
+      return `<image href="/${obj.src}" x="${x}" y="${ground - ph}" width="${pw}" height="${ph}" preserveAspectRatio="none" filter="url(#${tint(color)})" opacity="${opacity}"/>`;
+    }
     return `<svg x="${x}" y="${ground - ph}" width="${pw}" height="${ph}" viewBox="${b.x} ${b.y} ${b.w} ${b.h}" overflow="visible" preserveAspectRatio="none"><g fill="${color}" color="${color}" opacity="${opacity}">${obj.svg}</g></svg>`;
   };
 
