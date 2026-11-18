@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OBJECTS, OBJECTS_BY_ID, scoreGuess } from '../public/objects.js';
+import { existsSync } from 'node:fs';
+import { CATEGORIES, OBJECTS, OBJECTS_BY_ID, scoreGuess, valueAt } from '../public/objects.js';
 import { Room, pickRounds, cleanName, makeCode } from '../server/game.js';
 
 test('scoreGuess: 100 when exact, decreasing and symmetric in log space', () => {
@@ -13,21 +14,68 @@ test('scoreGuess: 100 when exact, decreasing and symmetric in log space', () => 
   assert.ok(tenPctOff >= 75 && tenPctOff <= 85, `10 % off gave ${tenPctOff}`);
 });
 
-test('catalogue: unique ids, positive heights', () => {
+test('catalogue: unique ids, valid categories, sizes and files', () => {
   assert.equal(new Set(OBJECTS.map((o) => o.id)).size, OBJECTS.length);
-  for (const o of OBJECTS) assert.ok(o.h > 0, o.id);
-});
-
-test('pickRounds: distinct objects, ratios in range', () => {
-  for (let i = 0; i < 50; i++) {
-    const rounds = pickRounds(10);
-    const ids = rounds.flatMap((r) => [r.refId, r.tgtId]);
-    assert.equal(new Set(ids).size, ids.length);
-    for (const r of rounds) {
-      const ratio = OBJECTS_BY_ID[r.tgtId].h / OBJECTS_BY_ID[r.refId].h;
-      assert.ok(ratio >= 1 / 12 && ratio <= 12);
+  assert.ok(OBJECTS.length >= 200, `only ${OBJECTS.length} objects`);
+  const cats = new Set(CATEGORIES.map((c) => c.id));
+  for (const o of OBJECTS) {
+    assert.ok(cats.has(o.cat), `${o.id}: unknown category ${o.cat}`);
+    assert.ok(o.h > 0 && o.size > 0, o.id);
+    assert.ok(['h', 'l', 'a'].includes(o.dim), o.id);
+    if (o.src) {
+      assert.ok(o.aspect > 0, o.id);
+      assert.ok(existsSync(new URL(`../public/${o.src}`, import.meta.url)), `${o.id}: missing ${o.src}`);
+    } else {
+      assert.ok(o.svg && o.dim === 'h', o.id);
     }
   }
+  for (const c of CATEGORIES) assert.ok(OBJECTS.filter((o) => o.cat === c.id).length >= 15, c.id);
+});
+
+test('valueAt: height, length and area', () => {
+  const g = OBJECTS_BY_ID.giraffe;
+  assert.equal(valueAt(g, g.h), g.size);
+  const w = OBJECTS_BY_ID.bluewhale;
+  assert.ok(Math.abs(valueAt(w, w.h) - w.size) < 1e-9);
+  const fr = OBJECTS_BY_ID.c_fr;
+  assert.equal(valueAt(fr, fr.h), fr.size);
+  assert.ok(Math.abs(valueAt(fr, fr.h * 2) - fr.size * 4) < 1e-6);
+});
+
+test('pickRounds: one category per round, ratios in range, no repeated pair', () => {
+  for (const category of ['all', ...CATEGORIES.map((c) => c.id)]) {
+    for (let i = 0; i < 20; i++) {
+      const rounds = pickRounds(10, category);
+      assert.equal(rounds.length, 10);
+      const pairs = new Set(rounds.map((r) => `${r.refId}|${r.tgtId}`));
+      assert.equal(pairs.size, 10);
+      for (const r of rounds) {
+        const ref = OBJECTS_BY_ID[r.refId];
+        const tgt = OBJECTS_BY_ID[r.tgtId];
+        assert.equal(ref.cat, tgt.cat);
+        if (category !== 'all') assert.equal(ref.cat, category);
+        const ratio = tgt.h / ref.h;
+        assert.ok(ratio >= 1 / 12 && ratio <= 12);
+      }
+    }
+  }
+  // 'all' deals every category before repeating one.
+  const cats = pickRounds(CATEGORIES.length, 'all').map((r) => OBJECTS_BY_ID[r.refId].cat);
+  assert.equal(new Set(cats).size, CATEGORIES.length);
+});
+
+test('category setting: host only, unknown values ignored', () => {
+  const room = new Room('CATS', () => {});
+  room.join('player-a1', 'Alice');
+  room.join('player-b1', 'Bob');
+  room.updateSettings('player-b1', { category: 'pays' });
+  assert.equal(room.settings.category, 'all');
+  room.updateSettings('player-a1', { category: 'nope' });
+  assert.equal(room.settings.category, 'all');
+  room.updateSettings('player-a1', { category: 'pays', rounds: 3 });
+  room.start('player-a1');
+  for (const r of room.rounds) assert.equal(OBJECTS_BY_ID[r.refId].cat, 'pays');
+  room.dispose();
 });
 
 test('cleanName and makeCode', () => {

@@ -3,6 +3,7 @@
 Jeu multijoueur d’estimation de tailles. À chaque manche, une silhouette apparaît à côté d’un objet de référence : redimensionne-la jusqu’à sa vraie taille avant la fin du chrono. Jusqu’à 100 points par manche.
 
 - Un joueur crée une partie et partage le code (ou le lien d’invitation).
+- L’hôte choisit une catégorie, ou « Toutes catégories » (chaque manche tire alors une catégorie, en les passant toutes avant d’en répéter une) : **Animaux & nature** (62), **Préhistoire** (19), **Véhicules** (23), **Monuments & bâtiments** (23), **Objets du quotidien** (33) et **Pays** (55), soit 215 objets. Les deux objets d’une manche sont toujours de la même catégorie.
 - Tout le monde joue la même manche en même temps, avec un chrono commun.
 - Entre deux manches : la vraie taille, la miniature de la réponse de chaque joueur et le classement.
 - Fin de partie : podium et récap manche par manche, puis « Rejouer ».
@@ -38,18 +39,28 @@ Bon à savoir sur le plan gratuit : le service s’endort après 15 min sans tra
 | `public/objects.js` | Catalogue des silhouettes (SVG + taille réelle) et calcul du score, partagé client/serveur |
 | `public/app.js` | Client : écrans, scène, redimensionnement à la souris, au doigt ou au clavier |
 
-### Silhouettes
+### Catalogue
 
-Les silhouettes sont des SVG libres de droits (CC0) venant de [PhyloPic](https://www.phylopic.org) pour les animaux et de [FreeSVG](https://freesvg.org) pour le reste ; sources et licences dans [`CREDITS.md`](CREDITS.md). Elles sont dans `public/silhouettes/`, recadrées au pixel près : le bas du fichier est le sol, sa hauteur est la hauteur réelle de l’objet. Le client les affiche via `<image>` et les recolore d’une seule teinte avec un filtre SVG (couleur du joueur, vert pour la vraie taille).
+Tout est dans `public/objects.js`, partagé par le serveur et le client. Chaque objet a une catégorie `cat` et une taille réelle `size` mesurée selon `dim` :
+
+| `dim` | Mesure | Affichage |
+| --- | --- | --- |
+| `h` | hauteur, en m | « 5,30 m de haut » |
+| `l` | longueur (ou envergure), en m | « 25 m de long » |
+| `a` | superficie, en km² (pays) | « 546 000 km² » |
+
+Le jeu met toujours les dessins à l’échelle par leur hauteur `h` (calculée à partir de `size` et de `aspect`), donc le score ne dépend pas de la mesure choisie : seul l’affichage change.
+
+### Images
+
+Les silhouettes sont des SVG libres de droits (CC0 / domaine public) venant de [PhyloPic](https://www.phylopic.org) et [FreeSVG](https://freesvg.org) ; les pays sont tracés depuis [Natural Earth](https://www.naturalearthdata.com/) (domaine public) dans une projection équivalente centrée sur chaque pays, pour qu’ils partagent tous la même échelle. Sources et licences dans [`CREDITS.md`](CREDITS.md). Les fichiers sont dans `public/silhouettes/` (`countries/` pour les pays), recadrés au pixel près : le bas du fichier est le sol. Le client les affiche via `<image>` et les recolore d’une seule teinte avec un filtre SVG.
 
 ### Ajouter un objet
 
 1. Trouve une silhouette CC0 (PhyloPic : filtre « domaine public » ; FreeSVG : tout est CC0).
 2. Recadre-la au plus près du dessin (viewBox serré, sans marge) et dépose-la dans `public/silhouettes/<id>.svg`.
-3. Ajoute une entrée dans `OBJECTS` (`public/objects.js`) : `id`, `name` (« Un/Une/La … »), `h` (hauteur réelle en mètres, du sol au point le plus haut du dessin), `src` et `aspect` (largeur ÷ hauteur du viewBox).
+3. Ajoute une entrée dans `OBJECTS` : `id`, `name` (« Un/Une/Le/La/Les/L’… », pour que les phrases du jeu s’accordent), `cat`, `dim`, `size`, `src` (`'silhouettes/<id>.svg'` devient `src: '<id>'`) et `aspect` (largeur ÷ hauteur du viewBox).
 4. Ajoute sa ligne dans `CREDITS.md`.
-
-Pour une forme purement géométrique, on peut aussi donner un `svg` en ligne à la place de `src` (voir la porte ou la pyramide) : le client mesure alors lui-même la boîte englobante.
 
 ### Score
 

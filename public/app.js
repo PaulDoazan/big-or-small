@@ -1,4 +1,4 @@
-import { OBJECTS, OBJECTS_BY_ID, RATIO_MIN, RATIO_MAX, scoreGuess } from './objects.js';
+import { CATEGORIES, OBJECTS, OBJECTS_BY_ID, RATIO_MIN, RATIO_MAX, scoreGuess, valueAt } from './objects.js';
 
 /* global io */
 const $ = (id) => document.getElementById(id);
@@ -35,7 +35,6 @@ function measureAll() {
   for (const o of OBJECTS) {
     if (o.src) {
       BOX[o.id] = { aspect: o.aspect };
-      new Image().src = `/${o.src}`; // warm the cache so a round never starts on a blank slot
       continue;
     }
     const g = document.createElementNS(SVGNS, 'g');
@@ -45,6 +44,23 @@ function measureAll() {
     BOX[o.id] = { x: b.x, y: b.y, w: b.width, h: b.height, aspect: b.width / b.height };
     host.removeChild(g);
   }
+}
+
+/** Loads images into the cache: the round's pair right away, the rest when the page is idle. */
+const PRELOADED = new Set();
+function preload(obj) {
+  if (!obj?.src || PRELOADED.has(obj.id)) return;
+  PRELOADED.add(obj.id);
+  new Image().src = `/${obj.src}`;
+}
+function preloadAllWhenIdle() {
+  const queue = OBJECTS.filter((o) => o.src);
+  const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
+  const step = () => {
+    for (let i = 0; i < 8 && queue.length; i++) preload(queue.shift());
+    if (queue.length) idle(step);
+  };
+  setTimeout(() => idle(step), 2500);
 }
 
 /**
@@ -67,12 +83,31 @@ function tint(color) {
 }
 
 /* ---------------- formatting ---------------- */
+const NUM = new Intl.NumberFormat('fr-FR');
+const round3 = (v) => {
+  if (v <= 0) return 0;
+  const p = 10 ** (Math.floor(Math.log10(v)) - 2);
+  return Math.round(v / p) * p;
+};
 function fmtLen(m) {
+  if (m >= 10000) return `${NUM.format(Math.round(round3(m) / 1000))} km`;
+  if (m >= 1000) return `${(m / 1000).toFixed(1).replace('.', ',')} km`;
   if (m >= 100) return `${Math.round(m)} m`;
   if (m >= 10) return `${m.toFixed(1).replace('.', ',')} m`;
   if (m >= 1) return `${m.toFixed(2).replace('.', ',')} m`;
   if (m >= 0.1) return `${Math.round(m * 100)} cm`;
-  return `${(m * 100).toFixed(1).replace('.', ',')} cm`;
+  if (m >= 0.01) return `${(m * 100).toFixed(1).replace('.', ',')} cm`;
+  return `${(m * 1000).toFixed(1).replace('.', ',')} mm`;
+}
+/** The quantity the player reasons about (height, length or area), formatted with its unit. */
+function fmtValue(obj, hMeters) {
+  const v = valueAt(obj, hMeters);
+  const txt = obj.dim === 'a' ? `${NUM.format(round3(v))} km²` : fmtLen(v);
+  return obj.label ? `${txt} ${obj.label}` : txt;
+}
+/** Error in the measured quantity (area for countries, so it matches the figures shown). */
+function errOf(obj, hGuess, hTrue) {
+  return fmtErr(valueAt(obj, hGuess), valueAt(obj, hTrue));
 }
 function fmtErr(guess, truth) {
   const pct = (guess / truth - 1) * 100;
@@ -81,7 +116,20 @@ function fmtErr(guess, truth) {
 }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const initials = (name) => esc(name.trim().slice(0, 1).toUpperCase() || '?');
-const lc = (name) => name.charAt(0).toLowerCase() + name.slice(1);
+// French articles: lower-case them inside a sentence, keep proper names as they are.
+const ARTICLE = /^(Un|Une|Le|La|Les|L’)\b|^L’/;
+const lc = (name) => (ARTICLE.test(name) ? name.charAt(0).toLowerCase() + name.slice(1) : name);
+/** "de" + name, with the French contractions: du, des, de la, de l’, d’un, d’… */
+function deName(name) {
+  if (name.startsWith('Le ')) return `du ${name.slice(3)}`;
+  if (name.startsWith('Les ')) return `des ${name.slice(4)}`;
+  if (name.startsWith('La ')) return `de la ${name.slice(3)}`;
+  if (name.startsWith('L’')) return `de l’${name.slice(2)}`;
+  if (/^Une? /.test(name)) return `d’${lc(name)}`;
+  if (/^[AEIOUYÉÈÊÂÎÔaeiouyéèêâîô]/.test(name)) return `d’${name}`;
+  return `de ${name}`;
+}
+const catName = (id) => CATEGORIES.find((c) => c.id === id)?.name ?? 'Toutes catégories';
 
 /* ---------------- scene rendering ---------------- */
 function niceStep(raw) {
@@ -119,7 +167,8 @@ function drawScene(svg, { ref, layers, grid = true, truthLine = null, handle = f
       if (!compact) out += `<text x="8" y="${y - 5}" style="fill:var(--grid-text);font-family:var(--mono)" font-size="11">${fmtLen(v)}</text>`;
     }
   }
-  out += `<line x1="0" x2="${W}" y1="${ground}" y2="${ground}" style="stroke:var(--ink)" stroke-width="2"/>`;
+  // Countries float on the map: no ground line, only the scale grid.
+  if (ref.obj.cat !== 'pays') out += `<line x1="0" x2="${W}" y1="${ground}" y2="${ground}" style="stroke:var(--ink)" stroke-width="2"/>`;
 
   const place = (obj, h, x, color, opacity = 1) => {
     const b = BOX[obj.id];
@@ -143,7 +192,7 @@ function drawScene(svg, { ref, layers, grid = true, truthLine = null, handle = f
 
   if (!compact) {
     const refLabelY = ground + 22;
-    out += `<text x="${refX + (refW * scale) / 2}" y="${refLabelY}" text-anchor="middle" style="fill:var(--ink-2);font-family:var(--mono)" font-size="12">${esc(fmtLen(ref.h))}</text>`;
+    out += `<text x="${refX + (refW * scale) / 2}" y="${refLabelY}" text-anchor="middle" style="fill:var(--ink-2);font-family:var(--mono)" font-size="12">${esc(fmtValue(ref.obj, ref.h))}</text>`;
   }
 
   if (handle) {
@@ -256,6 +305,8 @@ function renderLobby() {
     )
     .join('');
   const host = isHost();
+  $('set-category').value = state.settings.category ?? 'all';
+  $('set-category').disabled = !host;
   $('set-rounds').value = String(state.settings.rounds);
   $('set-timer').value = String(state.settings.timer);
   $('set-rounds').disabled = !host;
@@ -289,8 +340,10 @@ function renderGame() {
   locked = locked || r.locked.includes(playerId);
   const ref = OBJECTS_BY_ID[r.refId];
   const tgt = OBJECTS_BY_ID[r.tgtId];
-  $('round-label').textContent = `Manche ${r.index + 1}/${r.total}`;
-  $('prompt').innerHTML = `Quelle taille fait <b class="tgt">${esc(lc(tgt.name))}</b> à côté ${ref.name.startsWith('La ') || ref.name.startsWith('Le ') ? 'de ' : 'd’'}<b>${esc(lc(ref.name))}</b>&nbsp;?`;
+  preload(ref);
+  preload(tgt);
+  $('round-label').textContent = `Manche ${r.index + 1}/${r.total} · ${catName(tgt.cat)}`;
+  $('prompt').innerHTML = `Mets <b class="tgt">${esc(lc(tgt.name))}</b> à l’échelle <b>${esc(deName(ref.name))}</b>`;
   $('lockdots').innerHTML = state.players
     .filter((p) => p.connected)
     .map((p) => `<li class="avatar ${r.locked.includes(p.id) ? 'done' : ''}" style="background:${p.color}" title="${esc(p.name)}">${initials(p.name)}</li>`)
@@ -311,7 +364,7 @@ function updateGameView() {
   });
   $('stage').classList.toggle('locked', locked);
   $('slider').value = String(sliderFromRatio(ratio));
-  $('readout').textContent = fmtLen(ratio * ref.h);
+  $('readout').textContent = fmtValue(tgt, ratio * ref.h);
   for (const id of ['slider', 'btn-minus', 'btn-plus', 'btn-lock']) $(id).disabled = locked;
   $('btn-lock').textContent = locked ? 'Validé ✓' : 'Valider';
 }
@@ -361,8 +414,8 @@ function showVerdict({ refId, tgtId, ratio: r, trueRatio, points }) {
   const tgt = OBJECTS_BY_ID[tgtId];
   const color = me()?.color ?? '#ff5a36';
   const el = $('verdict');
-  $('verdict-title').innerHTML = `${esc(tgt.name)} mesure <b>${esc(fmtLen(trueRatio * ref.h))}</b>`;
-  $('verdict-guess').innerHTML = `Ta réponse : <b style="color:${color}">${esc(fmtLen(r * ref.h))}</b> <span class="mono">(${esc(fmtErr(r, trueRatio))})</span>`;
+  $('verdict-title').innerHTML = `${esc(tgt.name)}&nbsp;: <b>${esc(fmtValue(tgt, trueRatio * ref.h))}</b>`;
+  $('verdict-guess').innerHTML = `Ta réponse : <b style="color:${color}">${esc(fmtValue(tgt, r * ref.h))}</b> <span class="mono">(${esc(errOf(tgt, r * ref.h, trueRatio * ref.h))})</span>`;
   $('verdict-label').textContent = verdictLabel(points);
   $('verdict-score').textContent = '0';
   el.style.setProperty('--player', color);
@@ -417,8 +470,8 @@ function renderReveal() {
   const ref = OBJECTS_BY_ID[last.refId];
   const tgt = OBJECTS_BY_ID[last.tgtId];
   const truthH = last.trueRatio * ref.h;
-  $('reveal-round').textContent = `Manche ${state.round.index + 1}/${state.round.total}`;
-  $('reveal-title').innerHTML = `${esc(tgt.name)} mesure <b>${esc(fmtLen(truthH))}</b>`;
+  $('reveal-round').textContent = `Manche ${state.round.index + 1}/${state.round.total} · ${catName(tgt.cat)}`;
+  $('reveal-title').innerHTML = `${esc(tgt.name)}&nbsp;: <b>${esc(fmtValue(tgt, truthH))}</b>`;
 
   const ranked = [...state.players].sort((a, b) => (last.results[b.id]?.points ?? 0) - (last.results[a.id]?.points ?? 0));
   const best = last.results[ranked[0]?.id]?.points ?? 0;
@@ -426,7 +479,7 @@ function renderReveal() {
   minis.innerHTML = ranked
     .map((p, i) => {
       const res = last.results[p.id];
-      const err = res?.ratio ? fmtErr(res.ratio, last.trueRatio) : 'pas de réponse';
+      const err = res?.ratio ? errOf(tgt, res.ratio * ref.h, truthH) : 'pas de réponse';
       return `<div class="mini ${res?.points === best && best > 0 ? 'best' : ''}" style="animation-delay:${i * 70}ms"><svg data-pid="${p.id}"></svg><div class="mini-foot">${avatar(p)}<span class="mini-name">${esc(p.name)}<br><span class="mini-err">${esc(err)}</span></span><span class="mini-pts">+${res?.points ?? 0}</span></div></div>`;
     })
     .join('');
@@ -528,6 +581,7 @@ function bind() {
   });
   $('btn-copy-code').addEventListener('click', () => copy(inviteLink(state.code), 'Lien d’invitation copié'));
   $('btn-copy-link').addEventListener('click', () => copy(inviteLink(state.code), 'Lien d’invitation copié'));
+  $('set-category').addEventListener('change', (e) => socket.emit('settings', { category: e.target.value }));
   $('set-rounds').addEventListener('change', (e) => socket.emit('settings', { rounds: Number(e.target.value) }));
   $('set-timer').addEventListener('change', (e) => socket.emit('settings', { timer: Number(e.target.value) }));
   $('btn-start').addEventListener('click', () => socket.emit('start'));
@@ -594,6 +648,10 @@ async function boot() {
     /* fonts are cosmetic */
   }
   measureAll();
+  $('set-category').innerHTML =
+    `<option value="all">Toutes catégories (${OBJECTS.length})</option>` +
+    CATEGORIES.map((c) => `<option value="${c.id}">${esc(c.name)} (${OBJECTS.filter((o) => o.cat === c.id).length})</option>`).join('');
+  preloadAllWhenIdle();
   bind();
   $('input-name').value = local?.getItem('bos:name') ?? '';
   const code = new URLSearchParams(location.search).get('code');

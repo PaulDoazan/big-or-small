@@ -1,4 +1,4 @@
-import { OBJECTS, OBJECTS_BY_ID, scoreGuess, RATIO_MIN, RATIO_MAX } from '../public/objects.js';
+import { CATEGORIES, OBJECTS, OBJECTS_BY_ID, scoreGuess, RATIO_MIN, RATIO_MAX } from '../public/objects.js';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const COLORS = ['#ff5a36', '#2d7ff9', '#18a957', '#a64dff', '#f2a900', '#e83e8c', '#00a6a6', '#7a5c3e', '#5b6cff', '#c0392b', '#2c3e50', '#8bc34a'];
@@ -18,25 +18,49 @@ export function cleanName(name) {
   return s || 'Anonyme';
 }
 
-/** Picks `n` pairs whose height ratio lies in [1/12, 12], never reusing an object. */
-export function pickRounds(n, rand = Math.random) {
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const used = new Set();
-    const rounds = [];
-    let tries = 0;
-    while (rounds.length < n && tries++ < 2000) {
-      const ref = OBJECTS[Math.floor(rand() * OBJECTS.length)];
-      const tgt = OBJECTS[Math.floor(rand() * OBJECTS.length)];
-      if (ref === tgt || used.has(ref.id) || used.has(tgt.id)) continue;
+const BY_CATEGORY = Object.fromEntries(CATEGORIES.map((c) => [c.id, OBJECTS.filter((o) => o.cat === c.id)]));
+export const CATEGORY_IDS = new Set(['all', ...CATEGORIES.map((c) => c.id)]);
+
+/**
+ * Picks `n` rounds. Both objects of a round always come from the same category
+ * (a country is never compared with a giraffe); with 'all', the categories are
+ * dealt in shuffled cycles so a game visits each of them. The drawn heights stay
+ * within a factor 12 of each other, and an object is reused only when its
+ * category runs out.
+ */
+export function pickRounds(n, category = 'all', rand = Math.random) {
+  const ids = category === 'all' ? CATEGORIES.map((c) => c.id) : [category];
+  const deck = [];
+  while (deck.length < n) {
+    const cycle = [...ids];
+    for (let i = cycle.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [cycle[i], cycle[j]] = [cycle[j], cycle[i]];
+    }
+    deck.push(...cycle);
+  }
+  const used = new Set();
+  const pairs = new Set();
+  const rounds = [];
+  for (let i = 0; i < n; i++) {
+    const pool = BY_CATEGORY[deck[i]];
+    let pick = null;
+    for (let t = 0; t < 6000 && !pick; t++) {
+      const ref = pool[Math.floor(rand() * pool.length)];
+      const tgt = pool[Math.floor(rand() * pool.length)];
+      if (ref === tgt || pairs.has(`${ref.id}|${tgt.id}`)) continue;
+      if (t < 3000 && (used.has(ref.id) || used.has(tgt.id))) continue;
       const r = tgt.h / ref.h;
       if (r < 1 / 12 || r > 12 || Math.abs(Math.log(r)) < 0.08) continue;
-      used.add(ref.id);
-      used.add(tgt.id);
-      rounds.push({ refId: ref.id, tgtId: tgt.id });
+      pick = { refId: ref.id, tgtId: tgt.id };
     }
-    if (rounds.length === n) return rounds;
+    if (!pick) throw new Error(`Not enough objects in category ${deck[i]}`);
+    used.add(pick.refId);
+    used.add(pick.tgtId);
+    pairs.add(`${pick.refId}|${pick.tgtId}`);
+    rounds.push(pick);
   }
-  throw new Error('Not enough objects for that many rounds');
+  return rounds;
 }
 
 const clampRatio = (r) => Math.min(RATIO_MAX, Math.max(RATIO_MIN, Number(r)));
@@ -47,7 +71,7 @@ export class Room {
     this.onChange = onChange;
     this.players = new Map(); // id -> player
     this.hostId = null;
-    this.settings = { rounds: 5, timer: 30 };
+    this.settings = { rounds: 5, timer: 30, category: 'all' };
     this.phase = 'lobby'; // lobby | playing | reveal | final
     this.rounds = [];
     this.roundIndex = -1;
@@ -94,9 +118,10 @@ export class Room {
     return this.hostId === id;
   }
 
-  updateSettings(id, { rounds, timer }) {
+  updateSettings(id, { rounds, timer, category }) {
     if (!this.isHost(id) || this.phase !== 'lobby') return;
     if (rounds !== undefined) this.settings.rounds = Math.min(10, Math.max(1, Math.round(Number(rounds) || 5)));
+    if (category !== undefined && CATEGORY_IDS.has(category)) this.settings.category = category;
     if (timer !== undefined) this.settings.timer = Math.min(120, Math.max(10, Math.round(Number(timer) || 30)));
     this.changed();
   }
@@ -106,7 +131,7 @@ export class Room {
     for (const p of this.players.values()) p.score = 0;
     // Players who left during the previous game do not come back as ghosts.
     for (const [pid, p] of this.players) if (!p.connected) this.players.delete(pid);
-    this.rounds = pickRounds(this.settings.rounds);
+    this.rounds = pickRounds(this.settings.rounds, this.settings.category);
     this.history = [];
     this.roundIndex = -1;
     this.startRound();
