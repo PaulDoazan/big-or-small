@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Big or Small</title>
+  <meta name="description" content="Jeu multijoueur : redimensionne la silhouette à la bonne taille et affronte tes amis.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d1b2f'/%3E%3Crect x='6' y='16' width='7' height='10' rx='2' fill='%23f6f1e7'/%3E%3Crect x='16' y='6' width='10' height='20' rx='2' fill='%23ff5a36'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Accueil Big or Small">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+      <span>Big<em>or</em>Small</span>
+    </a>
+    <div class="topbar-right" id="topbar-room" hidden>
+      <span class="pill mono" id="topbar-code"></span>
+      <button class="link" id="btn-leave" type="button">Quitter</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- HOME -->
+    <section class="screen" id="screen-home" hidden>
+      <div class="hero">
+        <h1>À quelle taille&nbsp;?</h1>
+        <p class="lead">Une silhouette, un repère. Étire-la jusqu’à sa vraie taille, plus vite et plus juste que tes amis.</p>
+        <div class="hero-demo" aria-hidden="true">
+          <svg id="demo-scene" viewBox="0 0 600 220"></svg>
+        </div>
+      </div>
+      <form class="card form" id="form-home" autocomplete="off">
+        <label class="field">
+          <span>Ton pseudo</span>
+          <input id="input-name" maxlength="16" placeholder="Ex. Camille" required>
+        </label>
+        <button class="btn btn-primary" type="submit" id="btn-create">Créer une partie</button>
+        <div class="sep"><span>ou rejoindre avec un code</span></div>
+        <div class="join-row">
+          <input id="input-code" class="mono code-input" maxlength="4" placeholder="ABCD" aria-label="Code de la partie">
+          <button class="btn" type="button" id="btn-join">Rejoindre</button>
+        </div>
+        <p class="error" id="home-error" role="alert"></p>
+      </form>
+      <ol class="howto">
+        <li><b>1</b> Crée une partie et partage le code.</li>
+        <li><b>2</b> À chaque manche, redimensionne l’objet à côté du repère.</li>
+        <li><b>3</b> Valide avant la fin du chrono : jusqu’à 100 points par manche.</li>
+      </ol>
+    </section>
+
+    <!-- LOBBY -->
+    <section class="screen" id="screen-lobby" hidden>
+      <div class="lobby-head">
+        <p class="kicker">Code de la partie</p>
+        <button class="code-big mono" id="btn-copy-code" type="button" title="Copier le lien d’invitation"></button>
+        <button class="btn btn-small" id="btn-copy-link" type="button">Copier le lien d’invitation</button>
+      </div>
+      <div class="lobby-grid">
+        <div class="card">
+          <h2>Joueurs <span class="count" id="lobby-count"></span></h2>
+          <ul class="players" id="lobby-players"></ul>
+        </div>
+        <div class="card">
+          <h2>Réglages</h2>
+          <label class="field inline">
+            <span>Manches</span>
+            <select id="set-rounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select>
+          </label>
+          <label class="field inline">
+            <span>Chrono par manche</span>
+            <select id="set-timer"><option value="15">15 s</option><option value="20">20 s</option><option value="30" selected>30 s</option><option value="45">45 s</option><option value="60">60 s</option></select>
+          </label>
+          <button class="btn btn-primary" id="btn-start" type="button">Lancer la partie</button>
+          <p class="muted" id="lobby-wait">En attente de l’hôte…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- GAME -->
+    <section class="screen" id="screen-game" hidden>
+      <div class="game-head">
+        <span class="pill mono" id="round-label"></span>
+        <div class="timer" id="timer"><div class="timer-fill" id="timer-fill"></div><span class="mono" id="timer-text"></span></div>
+        <ul class="lockdots" id="lockdots" aria-label="Joueurs ayant validé"></ul>
+      </div>
+      <h2 class="prompt" id="prompt"></h2>
+      <div class="stage-wrap">
+        <svg class="stage" id="stage" role="img" aria-label="Scène de comparaison"></svg>
+        <p class="stage-hint" id="stage-hint">Glisse vers le haut ou le bas pour redimensionner</p>
+      </div>
+      <div class="controls">
+        <button class="btn btn-round" id="btn-minus" type="button" aria-label="Plus petit">−</button>
+        <input type="range" id="slider" min="0" max="1000" step="1" aria-label="Taille">
+        <button class="btn btn-round" id="btn-plus" type="button" aria-label="Plus grand">+</button>
+        <span class="readout mono" id="readout"></span>
+        <button class="btn btn-primary" id="btn-lock" type="button">Valider</button>
+      </div>
+    </section>
+
+    <!-- REVEAL -->
+    <section class="screen" id="screen-reveal" hidden>
+      <div class="reveal-head">
+        <span class="pill mono" id="reveal-round"></span>
+        <h2 id="reveal-title"></h2>
+      </div>
+      <div class="reveal-grid">
+        <div class="minis" id="minis"></div>
+        <aside class="card board">
+          <h3>Classement</h3>
+          <ol class="leaderboard" id="leaderboard"></ol>
+          <button class="btn btn-primary" id="btn-next" type="button">Manche suivante</button>
+          <p class="muted" id="reveal-wait">L’hôte lance la suite…</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- FINAL -->
+    <section class="screen" id="screen-final" hidden>
+      <h1 class="final-title">Partie terminée</h1>
+      <div class="podium" id="podium"></div>
+      <div class="card">
+        <h3>Récap des manches</h3>
+        <div class="recap-wrap"><table class="recap" id="recap"></table></div>
+      </div>
+      <div class="final-actions">
+        <button class="btn btn-primary" id="btn-replay" type="button">Rejouer</button>
+        <button class="btn" id="btn-lobby" type="button">Retour au salon</button>
+        <p class="muted" id="final-wait">L’hôte peut relancer une partie.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <svg id="measure" width="0" height="0" style="position:absolute;visibility:hidden" aria-hidden="true"></svg>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
