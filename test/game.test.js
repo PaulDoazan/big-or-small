@@ -92,6 +92,21 @@ test('locked guesses cannot change; unlocked ones count when time is up', () => 
   room.dispose();
 });
 
+test('locking returns the verdict to that player only once', () => {
+  const room = newRoom();
+  room.join('player-a1', 'Alice');
+  room.join('player-b1', 'Bob');
+  room.start('player-a1');
+  const { refId, tgtId } = room.rounds[0];
+  const truth = OBJECTS_BY_ID[tgtId].h / OBJECTS_BY_ID[refId].h;
+  assert.equal(room.guess('player-a1', truth * 1.1, false), null);
+  const verdict = room.guess('player-a1', truth * 1.1, true);
+  assert.deepEqual(verdict, { refId, tgtId, ratio: truth * 1.1, trueRatio: truth, points: scoreGuess(truth * 1.1, truth) });
+  assert.equal(room.guess('player-a1', truth, true), null);
+  assert.equal('trueRatio' in room.publicState().round, false);
+  room.dispose();
+});
+
 test('host leaves mid-game: host passes on, round ends if everyone left has locked', () => {
   const room = newRoom();
   room.join('player-a1', 'Alice');

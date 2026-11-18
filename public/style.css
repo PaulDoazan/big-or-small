@@ -204,6 +204,33 @@ input:focus, select:focus { outline: none; border-color: var(--ink); }
 .final-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; flex-wrap: wrap; align-items: center; }
 .final-actions .muted { width: 100%; text-align: center; }
 
+/* ---------- verdict overlay ---------- */
+.verdict {
+  position: fixed; inset: 0; z-index: 20; background: var(--paper);
+  display: flex; flex-direction: column; animation: verdict-in 0.25s ease-out;
+}
+.verdict-inner {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px clamp(16px, 4vw, 32px); max-width: 1000px; width: 100%; margin: 0 auto; min-height: 0;
+}
+.verdict h2 { font-size: clamp(1.5rem, 4.4vw, 2.6rem); font-weight: 600; text-align: center; }
+.verdict h2 b { color: var(--truth); font-weight: 800; }
+.verdict-guess { margin: 0; font-size: clamp(1rem, 2.6vw, 1.3rem); color: var(--ink-2); text-align: center; }
+.verdict-guess b { font-weight: 800; }
+.verdict-scene {
+  display: block; width: 100%; flex: 1 1 auto; min-height: 180px; max-height: 46vh;
+  background: var(--card); border: 1.5px solid var(--line); border-radius: var(--radius);
+}
+.verdict-score { display: flex; align-items: baseline; gap: 6px; line-height: 1; margin-top: 6px; }
+#verdict-score { font-size: clamp(4rem, 14vw, 7.5rem); font-weight: 700; color: var(--player, var(--accent)); font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+.verdict-max { font-size: clamp(1.4rem, 4vw, 2.2rem); color: var(--ink-2); }
+.verdict-label { margin: 0; font-size: clamp(1.2rem, 3.4vw, 1.7rem); font-weight: 800; opacity: 0; transform: translateY(6px); transition: opacity 0.3s, transform 0.3s; min-height: 1.3em; }
+.verdict-label.show { opacity: 1; transform: none; }
+.verdict-bar { height: 6px; background: var(--player, var(--accent)); transform-origin: left; transform: scaleX(1); }
+.verdict.run .verdict-bar { animation: verdict-bar 4s linear forwards; }
+@keyframes verdict-bar { to { transform: scaleX(0); } }
+@keyframes verdict-in { from { opacity: 0; transform: scale(0.98); } }
+
 /* ---------- toast ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0;

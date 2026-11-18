@@ -135,6 +135,17 @@
     </section>
   </main>
 
+  <div class="verdict" id="verdict" hidden role="dialog" aria-modal="true" aria-labelledby="verdict-title">
+    <div class="verdict-inner">
+      <h2 id="verdict-title"></h2>
+      <p class="verdict-guess" id="verdict-guess"></p>
+      <svg class="verdict-scene" id="verdict-scene"></svg>
+      <div class="verdict-score"><span class="mono" id="verdict-score">0</span><span class="mono verdict-max">/100</span></div>
+      <p class="verdict-label" id="verdict-label"></p>
+    </div>
+    <div class="verdict-bar"></div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <svg id="measure" width="0" height="0" style="position:absolute;visibility:hidden" aria-hidden="true"></svg>
 

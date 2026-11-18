@@ -70,7 +70,10 @@ export function createApp() {
     socket.on('settings', (s = {}) => room?.updateSettings(playerId, s));
     socket.on('start', () => room?.start(playerId));
     socket.on('guess', ({ ratio } = {}) => room?.guess(playerId, ratio, false));
-    socket.on('lock', ({ ratio } = {}) => room?.guess(playerId, ratio, true));
+    socket.on('lock', ({ ratio } = {}, ack) => {
+      const verdict = room?.guess(playerId, ratio, true) ?? null;
+      if (typeof ack === 'function') ack(verdict);
+    });
     socket.on('next', () => room?.next(playerId));
     socket.on('lobby', () => room?.backToLobby(playerId));
 

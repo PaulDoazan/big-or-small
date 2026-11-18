@@ -52,7 +52,9 @@ test('two players: create, join by code, play a round, see each other’s scores
     assert.deepEqual(st.history, []);
 
     const revealed = nextState(b, (s) => s.phase === 'reveal');
-    a.emit('lock', { ratio: 1 });
+    const verdictA = await emit(a, 'lock', { ratio: 1 });
+    assert.equal(verdictA.ratio, 1);
+    assert.ok(verdictA.trueRatio > 0 && verdictA.points >= 0 && verdictA.points <= 100);
     b.emit('lock', { ratio: 2 });
     const rv = await revealed;
     const results = rv.history[0].results;

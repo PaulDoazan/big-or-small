@@ -123,16 +123,20 @@ export class Room {
   }
 
   guess(id, ratio, lock = false) {
-    if (this.phase !== 'playing' || !this.players.has(id)) return;
+    if (this.phase !== 'playing' || !this.players.has(id)) return null;
     const current = this.guesses.get(id);
-    if (current?.locked) return;
+    if (current?.locked) return null;
     const r = clampRatio(ratio);
-    if (!Number.isFinite(r)) return;
+    if (!Number.isFinite(r)) return null;
     this.guesses.set(id, { ratio: r, locked: Boolean(lock) });
-    if (lock) {
-      this.changed();
-      this.maybeEndRound();
-    }
+    if (!lock) return null;
+    // Once locked the answer cannot change, so the player may learn the truth right away.
+    const { refId, tgtId } = this.rounds[this.roundIndex];
+    const trueRatio = OBJECTS_BY_ID[tgtId].h / OBJECTS_BY_ID[refId].h;
+    const verdict = { refId, tgtId, ratio: r, trueRatio, points: scoreGuess(r, trueRatio) };
+    this.changed();
+    this.maybeEndRound();
+    return verdict;
   }
 
   maybeEndRound() {

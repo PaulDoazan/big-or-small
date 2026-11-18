@@ -312,8 +312,65 @@ function lock() {
   if (locked || state?.phase !== 'playing') return;
   locked = true;
   clearTimeout(sendTimer);
-  socket.emit('lock', { ratio });
+  socket.emit('lock', { ratio }, (verdict) => verdict && showVerdict(verdict));
   updateGameView();
+}
+
+/* ---------------- verdict: 4 s full screen after locking ---------------- */
+const VERDICT_MS = 4000;
+let verdictTimer = null;
+let verdictRaf = null;
+
+function verdictLabel(points) {
+  if (points >= 95) return 'Pile-poil !';
+  if (points >= 80) return 'Excellent';
+  if (points >= 60) return 'Bien vu';
+  if (points >= 35) return 'Pas loin';
+  return 'Raté…';
+}
+
+function showVerdict({ refId, tgtId, ratio: r, trueRatio, points }) {
+  const ref = OBJECTS_BY_ID[refId];
+  const tgt = OBJECTS_BY_ID[tgtId];
+  const color = me()?.color ?? '#ff5a36';
+  const el = $('verdict');
+  $('verdict-title').innerHTML = `${esc(tgt.name)} mesure <b>${esc(fmtLen(trueRatio * ref.h))}</b>`;
+  $('verdict-guess').innerHTML = `Ta réponse : <b style="color:${color}">${esc(fmtLen(r * ref.h))}</b> <span class="mono">(${esc(fmtErr(r, trueRatio))})</span>`;
+  $('verdict-label').textContent = verdictLabel(points);
+  $('verdict-score').textContent = '0';
+  el.style.setProperty('--player', color);
+  el.hidden = false;
+  el.classList.remove('run');
+  void el.offsetWidth; // restart the CSS countdown bar
+  el.classList.add('run');
+  drawScene($('verdict-scene'), {
+    ref: { obj: ref, h: ref.h },
+    layers: [
+      { obj: tgt, h: r * ref.h, color, opacity: 0.85 },
+      { obj: tgt, h: trueRatio * ref.h, color: TRUTH, opacity: 0.55 },
+    ],
+    truthLine: trueRatio * ref.h,
+  });
+
+  // Count from 0 up to the score, easing out.
+  cancelAnimationFrame(verdictRaf);
+  const start = performance.now() + 350;
+  const dur = 1600;
+  const step = (now) => {
+    const t = Math.min(1, Math.max(0, (now - start) / dur));
+    const eased = 1 - (1 - t) ** 3;
+    $('verdict-score').textContent = String(Math.round(points * eased));
+    if (t < 1) verdictRaf = requestAnimationFrame(step);
+    else $('verdict-label').classList.add('show');
+  };
+  $('verdict-label').classList.remove('show');
+  verdictRaf = requestAnimationFrame(step);
+
+  clearTimeout(verdictTimer);
+  verdictTimer = setTimeout(() => {
+    el.hidden = true;
+    el.classList.remove('run');
+  }, VERDICT_MS);
 }
 
 function tick() {
