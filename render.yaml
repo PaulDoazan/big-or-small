@@ -3,6 +3,10 @@ services:
     name: big-or-small
     runtime: node
     plan: free
+    # Closest region to French players; it cannot be changed once the service exists.
+    region: frankfurt
+    # Rooms live in memory: the game must run on exactly one instance.
+    numInstances: 1
     buildCommand: npm ci --omit=dev
     startCommand: npm start
     healthCheckPath: /healthz
