@@ -362,6 +362,8 @@ function updateGameView() {
     ref: { obj: ref, h: ref.h },
     layers: [{ obj: tgt, h: ratio * ref.h, color }],
     handle: !locked,
+    // No scale grid while guessing: reading sizes off it would make the round trivial.
+    grid: false,
   });
   $('stage').classList.toggle('locked', locked);
   $('slider').value = String(sliderFromRatio(ratio));
